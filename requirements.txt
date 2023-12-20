@@ -1,0 +1,8 @@
+#? [ 'discord.py' ]
+# Requirements for the optional discord.py features.
+discord.py>=2.3
+
+#! Build
+# Requirements only for building.
+# These are ignored by setup.py
+setuptools
