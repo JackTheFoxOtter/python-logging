@@ -390,9 +390,26 @@ def stream_supports_colour(stream: Any) -> bool:
     return is_a_tty and ('ANSICON' in os.environ or 'WT_SESSION' in os.environ)
 
 
-def get_handler():
+def get_handler(use_colour_if_supported : bool = True) -> logging.StreamHandler:
+    """
+    Returns a StreamHandler with a formatter attached.
+
+    If use_colour_if_supported is True and the stream of the handler supports color output,
+    a CustomColourFormatter is used. Otherwise default to CustomFormatter.
+
+    Parameters
+    ----------
+    use_colour_if_supported : bool
+        Whether to consider using CustomColourFormatter.
+
+    Returns
+    -------
+    logging.StreamHandler
+        The newly created StreamHandler
+
+    """
     handler = logging.StreamHandler()
-    if stream_supports_colour(handler.stream):
+    if use_colour_if_supported and stream_supports_colour(handler.stream):
         formatter = CustomColourFormatter()
     else:
         formatter = CustomFormatter()
@@ -401,25 +418,34 @@ def get_handler():
     return handler
 
 
-def setup_logging(file_path : Union[str, None] = None, file_log_level : int = logging.INFO) -> None:
+def setup_logging(file_path : Union[str, None] = None, file_log_level : int = logging.INFO, use_colour_if_supported : bool = True) -> None:
     """
     Function to setup logging configuration. Should only be called once at startup.
 
+    Parameters
+    ----------
+    file_path : `str` or `None`
+        If set, also attaches a logging.FileHandler for the specified file to the root logger.
+    file_log_level : `int`, optional
+        Which logging level the file handler should use. Defaults to `logging.INFO`.
+    use_colour_if_supported : `bool`, optional
+        Whether to consider using CustomColourFormatter.
+
     Info
     ----
-    For root logger, sets up a logging handler with either _CustomColourFormatter as formatter 
-    if the logging stream supports ANSI colour codes, or _CustomFormatter if it doesn't.
-    Sets the logging level of the root logger to logging.DEFAULT. This is mainly for third-party packages.
-    In our own code, we use logger instances returned from get_logger.
-    Lastly, adds a callback for sys.excepthook to allow our modified root logger to log
-    exceptions on root level using logging.CRITICAL as log level.
+    For root logger, sets up a logging handler with either `CustomColourFormatter` as formatter 
+    if the logging stream supports ANSI colour codes, or `CustomFormatter` if it doesn't.
+    Optionally attaches a `FileHandler` to the root logger, using `CustomFormatter`.
+    Sets the logging level of the root logger to `logging.DEFAULT`.
+    Lastly, adds a callback for `sys.excepthook` to allow our modified root logger to log
+    exceptions on root level using `logging.CRITICAL` as log level.
 
     """
     add_logging_level("NOTICE", 25) # Custom logging level. like INFO, but meant to be prominently displayed as a notification
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
-    root_logger.addHandler(get_handler())
+    root_logger.addHandler(get_handler(use_colour_if_supported))
 
     if file_path:
         # Also set up file logger
