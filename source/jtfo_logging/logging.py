@@ -182,7 +182,31 @@ class CustomColourFormatter(logging.Formatter):
 
     References
     ----------
-    This class was taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py and modified
+    This class was taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py and modified.
+    
+    Original License:
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015-present Rapptz
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
 
     """
     def __init__(self):
@@ -266,6 +290,48 @@ class CustomColourFormatter(logging.Formatter):
             record.msg = original_msg
 
 
+def is_docker() -> bool:
+    """
+    Determine if the current environment is running in a docker container.
+
+    Returns
+    -------
+    bool
+        Whether or not the current environment is running in a docker container.
+
+    References
+    ----------
+    This class was taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py.
+    
+    Original License:
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015-present Rapptz
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.    
+    
+    """
+    path = '/proc/self/cgroup'
+    return os.path.exists('/.dockerenv') or (os.path.isfile(path) and any('docker' in line for line in open(path)))
+
+
 def stream_supports_colour(stream: Any) -> bool:
     """
     Determine if the provided stream supports ANSI color codes.
@@ -282,16 +348,42 @@ def stream_supports_colour(stream: Any) -> bool:
 
     References
     ----------
-    This function was taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py
+    This class was taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py.
+    
+    Original License:
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015-present Rapptz
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
 
     """
+    is_a_tty = hasattr(stream, 'isatty') and stream.isatty()
+
     # Pycharm and Vscode support colour in their inbuilt editors
     if 'PYCHARM_HOSTED' in os.environ or os.environ.get('TERM_PROGRAM') == 'vscode':
-        return True
-
-    is_a_tty = hasattr(stream, 'isatty') and stream.isatty()
-    if sys.platform != 'win32':
         return is_a_tty
+
+    if sys.platform != 'win32':
+        # Docker does not consistently have a tty attached to it
+        return is_a_tty or is_docker()
 
     # ANSICON checks for things like ConEmu
     # WT_SESSION checks if this is Windows Terminal
@@ -344,3 +436,203 @@ def setup_logging(file_path : Union[str, None] = None, file_log_level : int = lo
             root_logger.critical("App has encountered an unhandled exception!", exc_info=(exc_type, exc_value, exc_traceback))
 
     sys.excepthook = _handle_uncaught_exception
+
+
+try:
+    # Extra functionality for "discord.py" if available
+    from discord.abc import GuildChannel
+    from discord import Embed, Colour
+    from discord.ext import tasks
+
+    from asyncio import get_running_loop, run_coroutine_threadsafe, AbstractEventLoop, Queue
+    from datetime import datetime
+    from re import sub
+
+
+    class AsyncQueueHandler(logging.Handler):
+        """
+        Logging handler emitting log records into internal asyncio.Queue instance.
+        Queue has to be read externally using async_get.
+
+        Used together with the CustomEmbedFormatter to create formatted message 
+        logging for use with Discord.py bots.
+        
+        Warnings
+        --------
+        The queue size isn't limited, and there is no mechanism to prevent it from filling up faster than messages are taken out.
+        The implementation is responsible for calling async_get to get elements from the queue fast enough.
+        This probably isn't suited for high-performance logging, but it should be fine for the purpose of occasionally logging
+        formatted messages to a Discord channel.
+
+        See Also
+        --------
+        register_discord_handlers
+        register_discord_handler
+        logging.Handler
+        asyncio.Queue
+
+        """
+        def __init__(self, loop : AbstractEventLoop, level : int):
+            """
+            Initialized async queue and calls super constructur.
+
+            Parameters
+            ----------
+            loop : AbstractEventLoop
+                The asyncio event loop to use (threadsafe) when putting into the queue / emitting log records.
+            level : int
+                Minimum logging level for which to emit logging records, passed to super constructor.
+
+            """
+            self._loop : AbstractEventLoop = loop
+            self._queue : Queue = Queue()
+            super().__init__(level)
+
+        def emit(self, record : logging.LogRecord) -> None:
+            """
+            Called when a record has a high enough level to be sent.
+            As long as the loop isn't closed, formats record and puts the resulting message
+            into the async queue.
+
+            Parameters
+            ----------
+            record : logging.LogRecord
+                The record to be formatted and logged.
+
+            """
+            if self._loop.is_closed(): return
+
+            msg : Any = self.format(record)
+            run_coroutine_threadsafe(self._queue.put(msg), self._loop)
+
+        async def async_get(self) -> Any:
+            """
+            Retrieves the next log message from the async queue.
+            If there is none, will wait until one is available.
+
+            See Also
+            --------
+            Queue.get
+
+            """
+            return await self._queue.get()
+
+
+    class CustomEmbedFormatter(logging.Formatter):
+        """
+        Custom embed formatter for logging to Discord channels.
+
+        Used together with AsyncQueueHandler to create formatted message 
+        logging for use with Discord.py bots.
+        
+        Info
+        ----
+        The embeds are formatted to make them visually more appealing.
+        First, the colour for the embed is chosen based on the log level:
+            NOTSET   (0) : Colour.dark_gray()
+            DEBUG    (10): Colour.purple()
+            INFO     (20): Colour.default()
+            NOTICE   (25): Colour.green()
+            WARNING  (30): Colour.yellow()
+            ERROR    (40): Colour.red()
+            CRITICAL (50): Colour.dark_red()
+        The log level name and the name of the logger are set as the embed's title.
+        The created date of the record is turned into a timezone-aware timestamp and will
+        display at the bottom of each embed.
+        Lastly, the description is put into a code box, using 'profile' as the language for highlighting.
+        If the record contains exc_info it will be appended in a second text box, also using 'profile' for highlighting.
+        If the extra-dictionary is present and contains a 'raw_msg' key with a string value, 
+        it will be appended to the embed description as a multi-line quote.
+        That way, custom formatting for it can still be rendered if necessary.
+
+        Warning
+        -------
+        To fix some issues with Discord's syntax highlighting for 'profile',
+        a couple of characters get replaced with lookalikes in the text contents:
+            ' ('        -> '\uFF08' (Fullwidth left parenthesis)
+            '('         -> '\uFF08' (Fullwidth left parenthesis)
+            r'\.(?=\D)' -> '\u2024' (One-dot leader)
+        This is fine for displaying, but needs to be considered before doing anything
+        else with the messages!
+
+        """
+        def __init__(self):
+            self._level_colours = {
+                logging.NOTSET:   Colour.dark_gray(),
+                logging.DEBUG:    Colour.purple(),
+                logging.INFO:     Colour.default(),
+                logging.NOTICE:   Colour.green(), # Custom logging level
+                logging.WARNING:  Colour.yellow(),
+                logging.ERROR:    Colour.red(),
+                logging.CRITICAL: Colour.dark_red(),
+            }
+
+        def format(self, record : logging.LogRecord) -> Embed:
+            embed_title = f"**{record.levelname}** - {record.name}"
+            embed_colour = self._level_colours.get(record.levelno)
+            embed_timestamp = datetime.fromtimestamp(record.created, datetime.now().astimezone().tzinfo)
+            embed_description = ''
+
+            message = record.getMessage()
+            if len(message) > 0:
+                embed_description += f"```profile\n{message}```" # Replace number sign
+            
+            if record.exc_info:
+                # Add stacktrace as textbox
+                exc_text = self.formatException(record.exc_info)
+                embed_description += f"```profile\n{exc_text}```"
+
+            if len(embed_description) > 0:
+                # Hack: Some replacements with unicode lookalikes to fix syntax highlighting issues
+                embed_description = embed_description.replace(' (', '\uFF08')
+                embed_description = embed_description.replace('(', '\uFF08')
+                embed_description = sub(r'\.(?=\D)', '\u2024', embed_description)
+
+            if hasattr(record, 'raw_msg'):
+                # Extra raw payload that can be optionally defined
+                embed_description += '\n>>> ' + record.raw_msg
+
+            if len(embed_description) > 4096:
+                truncated_suffix = '...\n(truncated)```'
+                embed_description = embed_description[:4096-len(truncated_suffix)] + truncated_suffix
+
+            return Embed(
+                title=embed_title,
+                description=embed_description,
+                colour=embed_colour,
+                timestamp=embed_timestamp,
+            )
+
+
+    async def register_discord_handler(channel : GuildChannel, level : int = logging.INFO) -> None:
+        """
+        Registers and initializes an AsyncQueueHandler together with a CustomEmbedFormatter
+        and adds it to the root logger.
+        Also registers and starts a discord.ext.Loop worker to process / format log records when they appear.
+
+        Parameters
+        ----------
+        channel : discord.GuildChannel
+            Channel to send the message into. (The client should be logged in at time of initialization)
+        level : int
+            The logging level at which the handler should send log messages.
+
+        """
+        loop = get_running_loop()
+        handler = AsyncQueueHandler(loop, level)
+        handler.setFormatter(CustomEmbedFormatter())
+
+        @tasks.loop()
+        async def logging_worker():
+            # Send message to logging channel
+            embed = await handler.async_get()
+            await channel.send(embed=embed)
+        
+        root_logger = logging.getLogger()
+        root_logger.addHandler(handler)
+        logging_worker.start()
+
+
+except ImportError:
+    # Discord.py not available
+    pass
