@@ -1,4 +1,4 @@
-__title__ = "jtfo_logging"
+__title__ = "jtfo-logging"
 __description__ = "JackTheFoxOtter's logging configuration"
 __author__ = "JackTheFoxOtter"
 __url__ = "https://github.com/JackTheFoxOtter/python-logging"

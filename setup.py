@@ -1,6 +1,6 @@
-from setuptools import setup
+from setuptools import setup, find_namespace_packages
 
-with open('source/jtfo_logging/_metadata.py') as f:
+with open('source/jtfo/logging/_metadata.py') as f:
     exec(f.read())
 
 with open('README.md') as f:
@@ -15,7 +15,8 @@ setup(
     version=__version__,
     long_description=readme,
     long_description_content_type='text/markdown',
-    packages = [ 'source.jtfo_logging' ],
+    packages=find_namespace_packages(where='source', include=['jtfo.logging']),
+    package_dir={'': 'source'},
     install_requires=[],
     extras_require={
         'discord.py': {
