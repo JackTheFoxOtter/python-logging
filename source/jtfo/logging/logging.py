@@ -658,7 +658,6 @@ try:
         root_logger.addHandler(handler)
         logging_worker.start()
 
-
 except ImportError:
     # Discord.py not available
     pass
