@@ -15,7 +15,7 @@ setup(
     version=__version__,
     long_description=readme,
     long_description_content_type='text/markdown',
-    packages = [ 'jtfo_logging' ],
+    packages = [ 'source.jtfo_logging' ],
     install_requires=[],
     extras_require={
         'discord.py': {
