@@ -64,7 +64,7 @@ def add_logging_level(level_name : str, level_value : int) -> None:
         _for_logger_adapter.__name__ = method_name # Update __name__ property
         setattr(logger_adapter, method_name, _for_logger_adapter)
 
-    if Version(sys.version) >= Version("3.13.0"):
+    if Version(sys.version_info) >= Version("3.13.0"):
         # Since Python 3.13.0 locking uses context manager
         with logging._lock:
             _unsafe_add_internal()
