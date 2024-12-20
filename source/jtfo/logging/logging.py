@@ -236,7 +236,7 @@ class CustomColourFormatter(logging.Formatter):
             (logging.ERROR,    '\x1b[31;1m'),
             (logging.CRITICAL, '\x1b[41;1m'),
         ]
-        c_accent = '\x1b[37m'
+        c_accent = '\x1b[90m'
         c_name   = '\x1b[34m'
         c_reset  = '\x1b[0m'
 
