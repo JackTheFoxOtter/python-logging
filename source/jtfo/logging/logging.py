@@ -236,14 +236,15 @@ class CustomColourFormatter(logging.Formatter):
             (logging.ERROR,    '\x1b[31;1m'),
             (logging.CRITICAL, '\x1b[41;1m'),
         ]
+        c_accent = '\x1b[37m'
         c_name   = '\x1b[34m'
         c_reset  = '\x1b[0m'
 
         self._formatters = {}
         for level, c_level in c_levels:
             self._formatters[level] = logging.Formatter(
-                f"%(asctime)s [{c_reset}{c_level}%(levelname)-8s{c_reset}] " \
-                f"{c_name}%(name)s{c_reset}: %(message)s",
+                f"{c_accent}%(asctime)s [{c_reset}{c_level}%(levelname)-8s{c_reset}{c_accent}] " \
+                f"{c_reset}{c_name}%(name)s{c_reset}{c_accent}: {c_reset}%(message)s",
                 '%Y-%m-%d %H:%M:%S',
                 style='%'
             )
