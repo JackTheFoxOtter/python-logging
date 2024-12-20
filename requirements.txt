@@ -1,5 +1,3 @@
-packaging
-
 #? [ 'discord.py' ]
 # Requirements for the optional discord.py features.
 discord.py>=2.3
