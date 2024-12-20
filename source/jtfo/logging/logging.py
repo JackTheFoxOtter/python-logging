@@ -1,3 +1,4 @@
+from packaging.version import Version
 from typing import Any, Union
 import logging
 import sys
@@ -44,7 +45,7 @@ def add_logging_level(level_name : str, level_value : int) -> None:
     level_name = level_name.upper() # Full uppercase, like INFO or ERROR
     method_name = level_name.lower() # Method name is always lowercase, like .info("") or .error("")
 
-    with logging._lock:
+    def _unsafe_add_internal():
         # Add level and property to logging
         logging.addLevelName(level_value, level_name)
         setattr(logging, level_name, level_value)
@@ -62,6 +63,19 @@ def add_logging_level(level_name : str, level_value : int) -> None:
         logger_adapter = logging.LoggerAdapter
         _for_logger_adapter.__name__ = method_name # Update __name__ property
         setattr(logger_adapter, method_name, _for_logger_adapter)
+
+    if Version(sys.version) >= Version("3.13.0"):
+        # Since Python 3.13.0 locking uses context manager
+        with logging._lock:
+            _unsafe_add_internal()
+    
+    else:
+        # Previously it would use _aquireLock() and _releaseLock()
+        logging._acquireLock()
+        try:
+            _unsafe_add_internal()
+        finally:
+            logging._releaseLock()
 
 
 class CustomFormatter(logging.Formatter):
